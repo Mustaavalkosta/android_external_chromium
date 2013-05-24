@@ -1,4 +1,5 @@
 // Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright (c) 2011, 2012 The Linux Foundation. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -228,8 +229,10 @@ int TransportConnectJob::DoResolveHost() {
 }
 
 int TransportConnectJob::DoResolveHostComplete(int result) {
-  if (result == OK)
+  if (result == OK) {
+    NotifyDelegateOfResolution(result, &addresses_, true /* allow reorder */);
     next_state_ = STATE_TRANSPORT_CONNECT;
+  }
   return result;
 }
 
@@ -383,6 +386,8 @@ void TransportConnectJob::DoIPv6FallbackTransportConnectComplete(int result) {
         base::TimeDelta::FromMinutes(10),
         100);
     set_socket(fallback_transport_socket_.release());
+    // address tag has changed since original resolution, so notify again. too late to reorder
+    NotifyDelegateOfResolution(result, fallback_addresses_.get(), false /* do not allow reorder */);
     next_state_ = STATE_NONE;
     transport_socket_.reset();
   } else {
@@ -425,13 +430,15 @@ TransportClientSocketPool::TransportClientSocketPool(
     ClientSocketPoolHistograms* histograms,
     HostResolver* host_resolver,
     ClientSocketFactory* client_socket_factory,
-    NetLog* net_log)
+    NetLog* net_log,
+    HttpNetworkSession *network_session)
     : base_(max_sockets, max_sockets_per_group, histograms,
             base::TimeDelta::FromSeconds(
                 ClientSocketPool::unused_idle_socket_timeout()),
             base::TimeDelta::FromSeconds(kUsedIdleSocketTimeout),
             new TransportConnectJobFactory(client_socket_factory,
-                                     host_resolver, net_log)) {
+                                     host_resolver, net_log),
+            network_session) {
   base_.EnableConnectBackupJobs();
 }
 
